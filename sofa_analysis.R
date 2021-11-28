@@ -52,7 +52,14 @@ res$delta <- round(4*res$Slope, 1)
 ## Databestand maken waarbij iedere patient één observatie bijdraagt
 dp <- d[!duplicated(d$Record.Id, fromLast = TRUE), ]
 dp <- merge(dp, res, by = "Record.Id")
-dp <- dp[, !names(dp) %in% c("X.y","X.x")]
+
+empty <- c("X", "X.y", "X.x")
+dp <- dp[, !names(dp) %in% empty]
+
+constant <- c("CHC.Dementia", "CHC.Connective_tissue_disease", "CHC.Hemiplegia",
+              "CHC.AIDS", "ckd_status.Creatinine_265_mmolL", "adrenaline",
+              "dobutamine", "dopamine")
+dp <- dp[, !names(dp) %in% constant]
 
 ## Model om mortaliteit te voorspellen
 table(dp$ICU_mortality)
@@ -74,5 +81,12 @@ model2
 r <- roc(dp$event, predict(model2, type = "fitted"), ci = TRUE)
 r
 
+setwd("C:/Users/sande/Documents/Werk/sofa/figs")
+png("auc.png", width = 500, height = 500, pointsize = 16)
 plot(r)
+dev.off()
+
+set.seed(070181)
+oc_auc <- round(0.5 + 0.5*validate(model2, B = 1000)[1, 5], 2)
+
 ### Einde file.

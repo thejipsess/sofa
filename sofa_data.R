@@ -6,7 +6,7 @@
 ### Doel syntax: csv data inlezen en bewerken voor analyse
 ###
 ### Start: 26/11/2021
-### Laatste aanpassing: 26/11/2021
+### Laatste aanpassing: 28/11/2021
 ###
 ### sessionInfo()
 ###
@@ -56,6 +56,17 @@ d <- read.csv("COVID19_MUMC__Daily_CRF_export_20211126.csv", header = TRUE, sep 
 names(d)[1] <- "Record.Id"
 length(d$Record.Id)
 length(unique(d$Record.Id))
+
+## Tweede bestand met additionele patienten
+d2 <- read.csv("ExportCRF_1e10dagen1.csv", header = TRUE, sep = ",")
+
+## Beide bestanden samenvoegen
+names(d) == names(d2)
+d  <- d[, 1:94]
+d2 <- d2[, 1:94]
+d2$sedation <- ifelse(d2$sedation == 1, "Yes", "No")
+
+d <- rbind(d, d2)
 
 ## Tijd sinds starttijd (intubatie voor mechanisch geventileerden)
 ## day_admission en day_intubation heel vaak 0!
