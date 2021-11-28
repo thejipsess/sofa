@@ -83,8 +83,11 @@ d <- data.frame(d)
 d$dag <- as.numeric(substr(d$Report.Name.Custom, 10, 11))
 data.frame(d$Record.Id, d$order, d$dag) ## Dubbel-check
 
-## Voor deze analyse: enkel dag 1 t/m 5 meenemen.
-d <- subset(d, d$dag < 6)
+## Voor deze analyse: enkel dag 1 t/m 5 meenemen. Maak kopieen met 8 en 10 dagen
+d   <- subset(d, d$dag > 0)
+d10 <- subset(d, d$dag < 11)
+d8  <- subset(d, d$dag < 9)
+d   <- subset(d, d$dag < 6)
 table(d$dag)
 
 d <- merge(a, d, by = "Record.Id")

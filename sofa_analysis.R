@@ -6,7 +6,7 @@
 ### Doel syntax: model voorspelling uiteindelijk overlijden
 ###
 ### Start: 26/11/2021
-### Laatste aanpassing: 26/11/2021
+### Laatste aanpassing: 28/11/2021
 ###
 ### sessionInfo()
 ###
@@ -58,7 +58,7 @@ dp <- dp[, !names(dp) %in% empty]
 
 constant <- c("CHC.Dementia", "CHC.Connective_tissue_disease", "CHC.Hemiplegia",
               "CHC.AIDS", "ckd_status.Creatinine_265_mmolL", "adrenaline",
-              "dobutamine", "dopamine")
+              "dobutamine", "dopamine", "anti_viral.Isavuconazol")
 dp <- dp[, !names(dp) %in% constant]
 
 ## Model om mortaliteit te voorspellen
@@ -87,6 +87,7 @@ plot(r)
 dev.off()
 
 set.seed(070181)
-oc_auc <- round(0.5 + 0.5*validate(model2, B = 1000)[1, 5], 2)
+roc_auc <- round(0.5 + 0.5*validate(model2, B = 1000)[1, 5], 2)
+roc_auc
 
 ### Einde file.
