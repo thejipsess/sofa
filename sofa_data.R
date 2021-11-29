@@ -6,7 +6,7 @@
 ### Doel syntax: csv data inlezen en bewerken voor analyse
 ###
 ### Start: 26/11/2021
-### Laatste aanpassing: 28/11/2021
+### Laatste aanpassing: 29/11/2021
 ###
 ### sessionInfo()
 ###
@@ -52,21 +52,10 @@ sum(is.na(a$gender))
 a <- subset(a, !is.na(a$gender))
 
 ## Daily data uit csv-bestand inlezen
-d <- read.csv("COVID19_MUMC__Daily_CRF_export_20211126.csv", header = TRUE, sep = ";")
+d <- read.csv("DailyCRFTotal.csv", header = TRUE, sep = ",")
 names(d)[1] <- "Record.Id"
 length(d$Record.Id)
 length(unique(d$Record.Id))
-
-## Tweede bestand met additionele patienten
-d2 <- read.csv("ExportCRF_1e10dagen1.csv", header = TRUE, sep = ",")
-
-## Beide bestanden samenvoegen
-names(d) == names(d2)
-d  <- d[, 1:94]
-d2 <- d2[, 1:94]
-d2$sedation <- ifelse(d2$sedation == 1, "Yes", "No")
-
-d <- rbind(d, d2)
 
 ## Tijd sinds starttijd (intubatie voor mechanisch geventileerden)
 ## day_admission en day_intubation heel vaak 0!
@@ -80,8 +69,9 @@ d$Record.Id
 d$order
 
 d <- data.frame(d)
-d$dag <- as.numeric(substr(d$Report.Name.Custom, 10, 11))
+d$dag <- as.numeric(substr(d$ReportNameCustom, 10, 11))
 data.frame(d$Record.Id, d$order, d$dag) ## Dubbel-check
+paste(round(sum(is.na(d$dag))/length(d$Record.Id)*100), "% missing dag", sep = "")
 
 ## Voor deze analyse: enkel dag 1 t/m 5 meenemen. Maak kopieen met 8 en 10 dagen
 d   <- subset(d, d$dag > 0)
@@ -91,6 +81,8 @@ d   <- subset(d, d$dag < 6)
 table(d$dag)
 
 d <- merge(a, d, by = "Record.Id")
+missing <- c(-96:-99)
+d[d == missing] <- NA
 
 ## Berekening SOFA scores
 d$SOFA_resp <- ifelse(d$PF_low < 13.3 & d$vent_mode != 'None (Not intubated)', 4,
