@@ -74,8 +74,18 @@ data.frame(d$Record.Id, d$order, d$dag) ## Dubbel-check
 paste(round(sum(is.na(d$dag))/length(d$Record.Id)*100), "% missing dag", sep = "")
 
 d <- merge(a, d, by = "Record.Id")
-missing <- c(-96:-99)
-d[d == missing] <- NA
+
+d$PF_low <- as.numeric(d$PF_low)
+d$trombocytes <- as.numeric(d$trombocytes)
+d$bilirubine <- as.numeric(d$bilirubine)
+d$GCS <- as.numeric(d$GCS)
+d$creatinine <- as.numeric(d$creatinine)
+
+d[d == -99] <- NA
+d[d == -98] <- NA
+d[d == -97] <- NA
+d[d == -96] <- NA
+d[d == -95] <- NA
 
 ## Berekening SOFA scores
 d$SOFA_resp <- ifelse(d$PF_low < 13.3 & d$vent_mode != 8, 4,
@@ -96,12 +106,11 @@ d$SOFA_live <- ifelse(d$bilirubine > 204, 4,
                ifelse(d$bilirubine >= 20, 1,
                ifelse(d$bilirubine < 20, 0, NA)))))
 
-d$SOFA_card <- ifelse(d$vasopressors == "Yes" & d$nor > 0.1, 4,
-               ifelse(d$vasopressors == "Yes" & d$nor > 0, 3,
+d$SOFA_card <- ifelse(d$vasopressors == 1 & d$nor > 0.1, 4,
+               ifelse(d$vasopressors == 1 & d$nor > 0, 3,
                ifelse(d$MAP_low <70, 1,
                ifelse(d$MAP_low >= 70, 0, NA))))
 
-d$GCS <- as.numeric(d$GCS)
 d$SOFA_neur <- ifelse(is.na(d$GCS),
                (ifelse(d$sedation == 1 & d$GCS_admission <= 5, 4,
                ifelse(d$sedation == 1 & d$GCS_admission <= 9, 3,
@@ -124,8 +133,8 @@ d$SOFA_neur <- ifelse(is.na(d$GCS),
                ifelse(d$sedation == 0 & d$GCS <= 14, 1,
                ifelse(d$sedation == 0 & d$GCS == 15, 0, NA))))))))))))
 
-d$SOFA_rena <- ifelse(d$dialysis == "Yes", 4,
-               ifelse(d$creatinine >440 | d$urine_output < 200, 4,
+d$SOFA_rena <- ifelse(d$dialysis == 1, 4,
+               ifelse(d$creatinine > 440 | d$urine_output < 200, 4,
                ifelse(d$creatinine >=300 | d$urine_output < 500, 3,
                ifelse(d$creatinine >= 171, 2,
                ifelse(d$creatinine >= 110, 1,
@@ -133,13 +142,6 @@ d$SOFA_rena <- ifelse(d$dialysis == "Yes", 4,
 
 d$SOFA_score <- rowSums(data.frame(d$SOFA_resp, d$SOFA_coag, d$SOFA_live,
                                    d$SOFA_card, d$SOFA_neur, d$SOFA_rena))
-
-## Voor deze analyse: enkel dag 1 t/m 5 meenemen. Maak kopieen met 8 en 10 dagen
-d   <- subset(d, d$dag > 0)
-d10 <- subset(d, d$dag < 11)
-d8  <- subset(d, d$dag < 9)
-d   <- subset(d, d$dag < 6)
-table(d$dag)
 
 ## Data opslaan om te modelleren
 setwd("c:/Users/sande/Documents/Werk/sofa/data")

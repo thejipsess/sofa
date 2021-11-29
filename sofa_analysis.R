@@ -37,8 +37,20 @@ library(data.table)
 setwd("C:/Users/sande/Documents/Werk/sofa/data")
 load("sofa_data.Rda")
 
+## Voor deze analyse: subsets o.b.v. dagen
+d   <- subset(d, d$dag > 0)
+d10 <- subset(d, d$dag < 11)
+d8  <- subset(d, d$dag < 9)
+d5  <- subset(d, d$dag < 6)
+d3  <- subset(d, d$dag < 4)
+
+table(d3$dag)
+
 ## Persoonslevel regressie om dag 1 en 5-dagen verandering sofa score met
 ## minimale meetfout te bepalen
+
+d <- d10
+
 models <- lmList(SOFA_score ~ dag | Record.Id, data = d, na.action = na.omit)
 coef(models)
 res <- data.frame(Record.Id = rownames(coef(models)),
@@ -70,14 +82,17 @@ table(dp$event)
 ## Afgeleiden bepalen
 dp$sofa_stijging <- ifelse(dp$delta > 0, 1, 0)
 
+## Selectie?
+## dp <- subset(dp, dp$ECMO != 1)
+
 dd <- datadist(dp)
 options(datadist = "dd")
 
 ## Model enkel op basis van SOFA score dag 1 en delta 1 tot 5
-model <- lrm(event ~ delta, data  = dp, x = TRUE, y = TRUE)
-model
-model <- lrm(event ~ day1 + delta, data = dp, x = TRUE, y = TRUE)
-model
+modela <- lrm(event ~ delta, data  = dp, x = TRUE, y = TRUE)
+modela
+modelb <- lrm(event ~ day1 + delta, data = dp, x = TRUE, y = TRUE)
+modelb
 
 ## Model aangevuld met geslacht en leeftijd
 model2 <-  lrm(event ~ day1 + delta + gender + age + BMI, data = dp, x = TRUE, y = TRUE)
