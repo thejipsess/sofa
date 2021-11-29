@@ -73,20 +73,13 @@ d$dag <- as.numeric(substr(d$ReportNameCustom, 10, 11))
 data.frame(d$Record.Id, d$order, d$dag) ## Dubbel-check
 paste(round(sum(is.na(d$dag))/length(d$Record.Id)*100), "% missing dag", sep = "")
 
-## Voor deze analyse: enkel dag 1 t/m 5 meenemen. Maak kopieen met 8 en 10 dagen
-d   <- subset(d, d$dag > 0)
-d10 <- subset(d, d$dag < 11)
-d8  <- subset(d, d$dag < 9)
-d   <- subset(d, d$dag < 6)
-table(d$dag)
-
 d <- merge(a, d, by = "Record.Id")
 missing <- c(-96:-99)
 d[d == missing] <- NA
 
 ## Berekening SOFA scores
-d$SOFA_resp <- ifelse(d$PF_low < 13.3 & d$vent_mode != 'None (Not intubated)', 4,
-               ifelse(d$PF_low < 26.7 & d$vent_mode != 'None (Not intubated)', 3,
+d$SOFA_resp <- ifelse(d$PF_low < 13.3 & d$vent_mode != 8, 4,
+               ifelse(d$PF_low < 26.7 & d$vent_mode != 8, 3,
                ifelse(d$PF_low < 40, 2,
                ifelse(d$PF_low < 53.3, 1,
                ifelse(d$PF_low >= 53.3, 0, NA)))))
@@ -110,36 +103,43 @@ d$SOFA_card <- ifelse(d$vasopressors == "Yes" & d$nor > 0.1, 4,
 
 d$GCS <- as.numeric(d$GCS)
 d$SOFA_neur <- ifelse(is.na(d$GCS),
-               (ifelse(d$sedation == "Yes" & d$GCS_admission <= 5, 4,
-               ifelse(d$sedation == "Yes" & d$GCS_admission <= 9, 3,
-               ifelse(d$sedation == "Yes" & d$GCS_admission <= 12, 2,
-               ifelse(d$sedation == "Yes" & d$GCS_admission <= 14, 1,
-               ifelse(d$sedation == "Yes" & d$GCS_admission == 15, 0,
-               ifelse(d$sedation == "No" & d$GCS_admission <= 5, 4,
-               ifelse(d$sedation == "No" & d$GCS_admission <= 9, 3,
-               ifelse(d$sedation == "No" & d$GCS_admission <= 12, 2,
-               ifelse(d$sedation == "No" & d$GCS_admission <= 14, 1,
-               ifelse(d$sedation == "No" & d$GCS_admission == 15, 0, NA))))))))))),
-              (ifelse(d$sedation == "Yes" & d$GCS <= 5, 4,
-               ifelse(d$sedation == "Yes" & d$GCS <= 9, 3,
-               ifelse(d$sedation == "Yes" & d$GCS <= 12, 2,
-               ifelse(d$sedation == "Yes" & d$GCS <= 14, 1,
-               ifelse(d$sedation == "Yes" & d$GCS == 15, 0,
-               ifelse(d$sedation == "No" & d$GCS <= 5, 4,
-               ifelse(d$sedation == "No" & d$GCS <= 9, 3,
-               ifelse(d$sedation == "No" & d$GCS <= 12, 2,
-               ifelse(d$sedation == "No" & d$GCS <= 14, 1,
-               ifelse(d$sedation == "No" & d$GCS == 15, 0, NA))))))))))))
+               (ifelse(d$sedation == 1 & d$GCS_admission <= 5, 4,
+               ifelse(d$sedation == 1 & d$GCS_admission <= 9, 3,
+               ifelse(d$sedation == 1 & d$GCS_admission <= 12, 2,
+               ifelse(d$sedation == 1 & d$GCS_admission <= 14, 1,
+               ifelse(d$sedation == 1 & d$GCS_admission == 15, 0,
+               ifelse(d$sedation == 0 & d$GCS_admission <= 5, 4,
+               ifelse(d$sedation == 0 & d$GCS_admission <= 9, 3,
+               ifelse(d$sedation == 0 & d$GCS_admission <= 12, 2,
+               ifelse(d$sedation == 0 & d$GCS_admission <= 14, 1,
+               ifelse(d$sedation == 0 & d$GCS_admission == 15, 0, NA))))))))))),
+              (ifelse(d$sedation == 1 & d$GCS <= 5, 4,
+               ifelse(d$sedation == 1 & d$GCS <= 9, 3,
+               ifelse(d$sedation == 1 & d$GCS <= 12, 2,
+               ifelse(d$sedation == 1 & d$GCS <= 14, 1,
+               ifelse(d$sedation == 1 & d$GCS == 15, 0,
+               ifelse(d$sedation == 0 & d$GCS <= 5, 4,
+               ifelse(d$sedation == 0 & d$GCS <= 9, 3,
+               ifelse(d$sedation == 0 & d$GCS <= 12, 2,
+               ifelse(d$sedation == 0 & d$GCS <= 14, 1,
+               ifelse(d$sedation == 0 & d$GCS == 15, 0, NA))))))))))))
 
 d$SOFA_rena <- ifelse(d$dialysis == "Yes", 4,
                ifelse(d$creatinine >440 | d$urine_output < 200, 4,
-               ifelse(d$creatinine >=300 | d$urine_output <500, 3,
+               ifelse(d$creatinine >=300 | d$urine_output < 500, 3,
                ifelse(d$creatinine >= 171, 2,
                ifelse(d$creatinine >= 110, 1,
                ifelse(d$creatinine < 110, 0, NA))))))
 
 d$SOFA_score <- rowSums(data.frame(d$SOFA_resp, d$SOFA_coag, d$SOFA_live,
                                    d$SOFA_card, d$SOFA_neur, d$SOFA_rena))
+
+## Voor deze analyse: enkel dag 1 t/m 5 meenemen. Maak kopieen met 8 en 10 dagen
+d   <- subset(d, d$dag > 0)
+d10 <- subset(d, d$dag < 11)
+d8  <- subset(d, d$dag < 9)
+d   <- subset(d, d$dag < 6)
+table(d$dag)
 
 ## Data opslaan om te modelleren
 setwd("c:/Users/sande/Documents/Werk/sofa/data")

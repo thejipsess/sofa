@@ -6,7 +6,7 @@
 ### Doel syntax: model voorspelling uiteindelijk overlijden
 ###
 ### Start: 26/11/2021
-### Laatste aanpassing: 28/11/2021
+### Laatste aanpassing: 29/11/2021
 ###
 ### sessionInfo()
 ###
@@ -47,6 +47,7 @@ names(res)[2] <- "Intercept"
 names(res)[3] <- "Slope"
 
 res$day1  <- round(res$Intercept + 1*res$Slope, 1)
+res$day5  <- round(res$Intercept + 5*res$Slope, 1)
 res$delta <- round(4*res$Slope, 1)
 
 ## Databestand maken waarbij iedere patient één observatie bijdraagt
@@ -58,7 +59,7 @@ dp <- dp[, !names(dp) %in% empty]
 
 constant <- c("CHC.Dementia", "CHC.Connective_tissue_disease", "CHC.Hemiplegia",
               "CHC.AIDS", "ckd_status.Creatinine_265_mmolL", "adrenaline",
-              "dobutamine", "dopamine", "anti_viral.Isavuconazol")
+              "dobutamine", "dopamine", "anti_viral.Isavuconazol", "isOnMediumCare")
 dp <- dp[, !names(dp) %in% constant]
 
 ## Model om mortaliteit te voorspellen
@@ -66,10 +67,15 @@ table(dp$ICU_mortality)
 dp$event <- ifelse(dp$ICU_mortality == "Death", 1, 0)
 table(dp$event)
 
+## Afgeleiden bepalen
+dp$sofa_stijging <- ifelse(dp$delta > 0, 1, 0)
+
 dd <- datadist(dp)
 options(datadist = "dd")
 
 ## Model enkel op basis van SOFA score dag 1 en delta 1 tot 5
+model <- lrm(event ~ delta, data  = dp, x = TRUE, y = TRUE)
+model
 model <- lrm(event ~ day1 + delta, data = dp, x = TRUE, y = TRUE)
 model
 
