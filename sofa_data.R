@@ -31,11 +31,9 @@
 library(reshape2)
 library(data.table)
 
-## Verwijzing naar map waarin data staat
-setwd("C:/Users/sande/Documents/Werk/sofa/data")
 
 ## Admission data uit csv-bestand inlezen
-a <- read.csv("COVID19_MUMC__export_20211126.csv", header = TRUE, sep = ";")
+a <- read.csv("../../Data/COVID19_MUMC__export_20211126.csv", header = TRUE, sep = ";")
 names(a)[1] <- "Record.Id"
 
 ## Inspectie data: unieke patientnummers
@@ -52,7 +50,7 @@ sum(is.na(a$gender))
 a <- subset(a, !is.na(a$gender))
 
 ## Daily data uit csv-bestand inlezen
-d <- read.csv("DailyCRFTotal.csv", header = TRUE, sep = ",")
+d <- read.csv("../../Data/DailyCRFTotal.csv", header = TRUE, sep = ",")
 names(d)[1] <- "Record.Id"
 length(d$Record.Id)
 length(unique(d$Record.Id))
@@ -69,7 +67,7 @@ d$Record.Id
 d$order
 
 d <- data.frame(d)
-d$dag <- as.numeric(substr(d$ReportNameCustom, 10, 11))
+d$dag <- as.numeric(substr(d$ReportNameCustom, 10, 11)) #!! What about samples with Daily CRF instead of COVID001_XX in ReportNameCustom column?
 data.frame(d$Record.Id, d$order, d$dag) ## Dubbel-check
 paste(round(sum(is.na(d$dag))/length(d$Record.Id)*100), "% missing dag", sep = "")
 
@@ -148,7 +146,6 @@ d$SOFA_score_min_neuro <-  rowSums(data.frame(d$SOFA_resp, d$SOFA_coag,
                                               d$SOFA_rena))
 
 ## Data opslaan om te modelleren
-setwd("c:/Users/sande/Documents/Werk/sofa/data")
-save(d, file = "sofa_data.Rda")
+save(d, file = "../../Data/sofa_data.Rda")
 
 ### Einde file.

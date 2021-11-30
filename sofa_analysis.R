@@ -32,10 +32,26 @@ library(lme4)
 library(rms)
 library(pROC)
 library(data.table)
+library(tidyverse)
+library(tidymodels)
+library(xgboost)
+library(themis)
+library(tictoc)
+
+# Load local scripts
+source("R/XGBoost.r")
+source("R/Parallel.r")
+
+
+
+#==============================================================================#
+#
+#   This Section contains the code from Sander
+#
+#==============================================================================#
 
 ## Databestand gecreeerd met sofa_data.R inlezen
-setwd("C:/Users/sande/Documents/Werk/sofa/data")
-load("sofa_data.Rda")
+load("Data/sofa_data.Rda")
 
 ## Voor deze analyse: subsets o.b.v. dagen
 d   <- subset(d, d$dag > 0)
@@ -178,4 +194,65 @@ ligpl <- round(ligdl/sum(dp$ICU_LoS, na.rm = TRUE)*100, 1)
 afkapl <- "lft>75"
 data.frame(afkapl, sensl, specl, ppvl, npvl, abstl, miscl, ligdl, ligpl)
 
-### Einde file.
+
+
+#==============================================================================#
+#
+#   This Section contains the code from Jip
+#
+#==============================================================================#
+
+#=======================#
+#                       #
+#       XGBOOST         #
+#                       #
+#=======================#
+#!!! still need to implement train/test split beforehand
+
+# Set a random seed
+seed <- 7649
+
+# Prepare date for XGBoost
+df <- dp %>%
+        select(event, day1, delta, age, gender) # select variables of interest
+
+# Set dependent variable name to y
+names(df)[1] <- "y"
+
+# Factorise dependent variable
+df$y <- as.factor(df$y)
+
+# Make sure there are no missings
+if(any(is.na(df))) print("WARNING!! There are still incomplete samples present")
+
+# Create preprocessing recipe
+ml_rec <- recipe(y ~ ., data = df) %>%
+        #step_range(all_numeric()) %>% # Min-max normalisation
+        step_dummy(all_predictors() & where(is.factor)) %>% # Convert to dummy variables
+        themis::step_upsample(y)
+
+# Set some naming to base the exported file names on
+tune_name <- "_tuning"
+
+# Set hyperparameter values to evaluate
+trees_val <- c(10, 100,1000, 2000)
+mtry_val <- c(1, 10, 20)
+min_n_val <- c(0, 1, 2, 5, 10, 20, 40)
+tree_depth_val <- c(1, 2, 5, 10, 20)
+learn_rate_val <- c(1e-8, 1e-4, 1e-2, 1e-1, 0.5, 1)
+loss_reduction_val <- c(1e-10, 1e-5, 0.1, 10)
+
+# Tune XGBoost hyperparamters
+tune_res_xg <- tune_xgboost(df, ml_rec, trees_val = trees_val,
+                            mtry_val = mtry_val, min_n_val = min_n_val,
+                            tree_depth_val = tree_depth_val,
+                            learn_rate_val = learn_rate_val,
+                            loss_reduction_val = loss_reduction_val, rep = 5,
+                            seed = seed, parallel_comp = TRUE, verbose = TRUE,
+                            k = 5, save = TRUE, entropy_grid = FALSE,
+                            save_name = paste("XGBoost", tune_name, sep = ""))
+
+
+modela <- lrm(event ~ delta, data  = dp, x = TRUE, y = TRUE)
+model3 <- lrm(event ~ day1 + delta + age + gender,
+              data = dp, x = TRUE, y = TRUE)
