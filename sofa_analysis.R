@@ -1,12 +1,12 @@
 ################################################################################
 ### MaastrICCht cohort
-### Auteur: Sander van Kuijk
+### Auteur: Sander van Kuijk & Frank van Rosmalen
 ###
 ### Doel project: Predictie mortaliteit na IC-opname o.b.v. SOFA dag 1-5/7
 ### Doel syntax: model voorspelling uiteindelijk overlijden
 ###
 ### Start: 26/11/2021
-### Laatste aanpassing: 29/11/2021
+### Laatste aanpassing: 30/11/2021
 ###
 ### sessionInfo()
 ###
@@ -81,6 +81,7 @@ table(dp$event)
 
 ## Afgeleiden bepalen
 dp$sofa_stijging <- ifelse(dp$delta > 0, 1, 0)
+dp$adv_age <- ifelse(dp$age > 65, 1, 0); table(dp$adv_age)
 
 ## Selectie?
 ## dp <- subset(dp, dp$ECMO != 1)
@@ -94,9 +95,12 @@ modela
 modelb <- lrm(event ~ day1 + delta, data = dp, x = TRUE, y = TRUE)
 modelb
 
-## Model aangevuld met geslacht en leeftijd
-model2 <-  lrm(event ~ day1 + delta + gender + age + BMI, data = dp, x = TRUE, y = TRUE)
+## Model aangevuld met geslacht en leeftijd, geslacht discutabel
+model2 <-  lrm(event ~ day1 + delta + age, data = dp, x = TRUE, y = TRUE)
 model2
+
+model3 <- lrm(event ~ day1 + delta + adv_age, data = dp, x = TRUE, y = TRUE)
+model3
 
 ## ROC curve
 r <- roc(dp$event, predict(model2, type = "fitted"), ci = TRUE)

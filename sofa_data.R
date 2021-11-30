@@ -1,6 +1,6 @@
 ################################################################################
 ### MaastrICCht cohort
-### Auteur: Sander van Kuijk
+### Auteur: Sander van Kuijk & Frank van Rosmalen
 ###
 ### Doel project: Predictie mortaliteit na IC-opname o.b.v. SOFA dag 1-5/7
 ### Doel syntax: csv data inlezen en bewerken voor analyse
@@ -142,6 +142,10 @@ d$SOFA_rena <- ifelse(d$dialysis == 1, 4,
 
 d$SOFA_score <- rowSums(data.frame(d$SOFA_resp, d$SOFA_coag, d$SOFA_live,
                                    d$SOFA_card, d$SOFA_neur, d$SOFA_rena))
+
+d$SOFA_score_min_neuro <-  rowSums(data.frame(d$SOFA_resp, d$SOFA_coag,
+                                              d$SOFA_live, d$SOFA_card,
+                                              d$SOFA_rena))
 
 ## Data opslaan om te modelleren
 setwd("c:/Users/sande/Documents/Werk/sofa/data")
