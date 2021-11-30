@@ -125,7 +125,7 @@ hist(dp$kans)
 
 dp <- subset(dp, !is.na(dp$kans))
 
-afkap <- seq(75, 95, 2.5)
+afkap <- seq(25, 95, 2.5)
 sens  <- rep(NA, length(afkap))
 spec  <- rep(NA, length(afkap))
 ppv   <- rep(NA, length(afkap))
@@ -149,14 +149,33 @@ for (i in 1:length(afkap)){
  abst[i] <- sum(risk.FN == 1, na.rm = TRUE)
  misc[i] <- table(risk.FN, dp$event)[2, 1]
  ligd[i] <- sum(ifelse(dp$ICU_LoS[risk.FN == 1] - 7 < 1, 0,
-                       dp$ICU_LoS[risk.FN == 1]), na.rm = TRUE)
+                       dp$ICU_LoS[risk.FN == 1] - 7), na.rm = TRUE)
  ligp[i] <- round(ligd[i]/sum(dp$ICU_LoS, na.rm = TRUE)*100, 1)
 
 }
 
 ## Afkap in (%), testkenmerken, aantal abstineren (let op: aantal al voor 7 dagen
-## van IC af, maar dat weten we uiteraard bij aanvang niet), aantal onjuist abstineren,
+## van IC af, maar dat weten we bij aanvang niet), aantal onjuist abstineren,
 ## gespaarde ligdagen, gespaarde ligdagen (%).
 data.frame(afkap, sens, spec, ppv, npv, abst, misc, ligd, ligp)
+
+## Alternatief: >70 komt er niet in
+risk.FN  <- ifelse(dp$age < 75, 0, 1)
+sensl <- round(table(risk.FN, dp$event)[2,2]/(table(risk.FN, dp$event)[2,2] +
+                  table(risk.FN, dp$event)[1,2])*100, 1)
+specl <- round(table(risk.FN, dp$event)[1,1]/(table(risk.FN, dp$event)[1,1] +
+                  table(risk.FN, dp$event)[2,1])*100, 1)
+ppvl  <- round(table(risk.FN, dp$event)[2,2]/(table(risk.FN, dp$event)[2,2] +
+                  table(risk.FN, dp$event)[2,1])*100, 1)
+npvl  <- round(table(risk.FN, dp$event)[1,1]/(table(risk.FN, dp$event)[1,1] +
+                  table(risk.FN, dp$event)[1,2])*100, 1)
+abstl <- sum(risk.FN == 1, na.rm = TRUE)
+miscl <- table(risk.FN, dp$event)[2, 1]
+ligdl <- sum(ifelse(dp$ICU_LoS[risk.FN == 1] - 7 < 1, 0,
+                       dp$ICU_LoS[risk.FN == 1] - 7), na.rm = TRUE)
+ligpl <- round(ligdl/sum(dp$ICU_LoS, na.rm = TRUE)*100, 1)
+
+afkapl <- "lft>75"
+data.frame(afkapl, sensl, specl, ppvl, npvl, abstl, miscl, ligdl, ligpl)
 
 ### Einde file.
