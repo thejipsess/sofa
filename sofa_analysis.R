@@ -41,15 +41,16 @@ load("sofa_data.Rda")
 d   <- subset(d, d$dag > 0)
 d10 <- subset(d, d$dag < 11)
 d8  <- subset(d, d$dag < 9)
+d7  <- subset(d, d$dag < 8)
 d5  <- subset(d, d$dag < 6)
 d3  <- subset(d, d$dag < 4)
 
-table(d3$dag)
+table(d7$dag)
 
-## Persoonslevel regressie om dag 1 en 5-dagen verandering sofa score met
+## Persoonslevel regressie om dag 1 en t-dagen verandering sofa score met
 ## minimale meetfout te bepalen
 
-d <- d10
+d <- d7
 
 models <- lmList(SOFA_score ~ dag | Record.Id, data = d, na.action = na.omit)
 coef(models)
@@ -99,11 +100,11 @@ modelb
 model2 <-  lrm(event ~ day1 + delta + age, data = dp, x = TRUE, y = TRUE)
 model2
 
-model3 <- lrm(event ~ day1 + delta + adv_age, data = dp, x = TRUE, y = TRUE)
+model3 <- lrm(event ~ day1 + delta + age + gender, data = dp, x = TRUE, y = TRUE)
 model3
 
 ## ROC curve
-r <- roc(dp$event, predict(model2, type = "fitted"), ci = TRUE)
+r <- roc(dp$event, predict(model3, type = "fitted"), ci = TRUE)
 r
 
 setwd("C:/Users/sande/Documents/Werk/sofa/figs")
@@ -114,5 +115,48 @@ dev.off()
 set.seed(070181)
 roc_auc <- round(0.5 + 0.5*validate(model2, B = 1000)[1, 5], 2)
 roc_auc
+
+## Afkappunten bepalen
+dp$kans <- predict(model3, type = "fitted")
+round(mean(dp$kans,na.rm = TRUE) - mean(dp$event[!is.na(dp$kans)]), 3) ## Check
+
+range(dp$kans, na.rm = TRUE)
+hist(dp$kans)
+
+dp <- subset(dp, !is.na(dp$kans))
+
+afkap <- seq(75, 95, 2.5)
+sens  <- rep(NA, length(afkap))
+spec  <- rep(NA, length(afkap))
+ppv   <- rep(NA, length(afkap))
+npv   <- rep(NA, length(afkap))
+abst  <- rep(NA, length(afkap))
+misc  <- rep(NA, length(afkap))
+ligd  <- rep(NA, length(afkap))
+ligp  <- rep(NA, length(afkap))
+
+for (i in 1:length(afkap)){
+
+ risk.FN  <- ifelse(dp$kans*100 < afkap[i], 0, 1)
+ sens[i] <- round(table(risk.FN, dp$event)[2,2]/(table(risk.FN, dp$event)[2,2] +
+                  table(risk.FN, dp$event)[1,2])*100, 1)
+ spec[i] <- round(table(risk.FN, dp$event)[1,1]/(table(risk.FN, dp$event)[1,1] +
+                  table(risk.FN, dp$event)[2,1])*100, 1)
+ ppv[i]  <- round(table(risk.FN, dp$event)[2,2]/(table(risk.FN, dp$event)[2,2] +
+                  table(risk.FN, dp$event)[2,1])*100, 1)
+ npv[i]  <- round(table(risk.FN, dp$event)[1,1]/(table(risk.FN, dp$event)[1,1] +
+                  table(risk.FN, dp$event)[1,2])*100, 1)
+ abst[i] <- sum(risk.FN == 1, na.rm = TRUE)
+ misc[i] <- table(risk.FN, dp$event)[2, 1]
+ ligd[i] <- sum(ifelse(dp$ICU_LoS[risk.FN == 1] - 7 < 1, 0,
+                       dp$ICU_LoS[risk.FN == 1]), na.rm = TRUE)
+ ligp[i] <- round(ligd[i]/sum(dp$ICU_LoS, na.rm = TRUE)*100, 1)
+
+}
+
+## Afkap in (%), testkenmerken, aantal abstineren (let op: aantal al voor 7 dagen
+## van IC af, maar dat weten we uiteraard bij aanvang niet), aantal onjuist abstineren,
+## gespaarde ligdagen, gespaarde ligdagen (%).
+data.frame(afkap, sens, spec, ppv, npv, abst, misc, ligd, ligp)
 
 ### Einde file.
