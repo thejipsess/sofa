@@ -2,4 +2,8 @@
 *~
 data/
 figs/
+Figures/
+Tables/
+Objects/
+*.png
 .Rproj.user

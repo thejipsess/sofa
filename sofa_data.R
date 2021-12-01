@@ -77,6 +77,7 @@ d$PF_low <- as.numeric(d$PF_low)
 d$trombocytes <- as.numeric(d$trombocytes)
 d$bilirubine <- as.numeric(d$bilirubine)
 d$GCS <- as.numeric(d$GCS)
+d$GCS_admission <- as.numeric(d$GCS_admission)
 d$creatinine <- as.numeric(d$creatinine)
 
 d[d == -99] <- NA

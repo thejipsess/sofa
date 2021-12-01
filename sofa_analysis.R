@@ -37,10 +37,16 @@ library(tidymodels)
 library(xgboost)
 library(themis)
 library(tictoc)
+library(ggplot2)
+library(SHAPforxgboost)
+library(fmsb)
+library(svglite)
 
 # Load local scripts
 source("R/XGBoost.r")
 source("R/Parallel.r")
+source("R/Visualisation.r")
+source("R/FeatureImportance.r")
 
 
 
@@ -120,12 +126,14 @@ model3 <- lrm(event ~ day1 + delta + age + gender, data = dp, x = TRUE, y = TRUE
 model3
 
 ## ROC curve
-r <- roc(dp$event, predict(model3, type = "fitted"), ci = TRUE)
+r <- pROC::roc(dp$event, predict(model3, type = "fitted"),  ci = TRUE)
 r
 
 setwd("C:/Users/sande/Documents/Werk/sofa/figs")
 png("auc.png", width = 500, height = 500, pointsize = 16)
-plot(r)
+ggroc(r, legacy.axes = TRUE) + 
+        geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1), color="darkgrey",
+                     linetype="dashed")
 dev.off()
 
 set.seed(070181)
@@ -134,6 +142,9 @@ roc_auc
 
 ## Afkappunten bepalen
 dp$kans <- predict(model3, type = "fitted")
+#dp$kans <- 1 - predict_classprob.model_fit(model_xg, juice(prep(test_rec)))[[1]]
+#dp$kans <- predict(model3, juice(prep(test_rec)), type = "fitted")
+
 round(mean(dp$kans,na.rm = TRUE) - mean(dp$event[!is.na(dp$kans)]), 3) ## Check
 
 range(dp$kans, na.rm = TRUE)
@@ -212,9 +223,29 @@ data.frame(afkapl, sensl, specl, ppvl, npvl, abstl, miscl, ligdl, ligpl)
 # Set a random seed
 seed <- 7649
 
+# Create necessary directories if they do not yet exist
+dir.create("Figures", showWarnings = FALSE)
+dir.create("Objects", showWarnings = FALSE)
+dir.create("Tables", showWarnings = FALSE)
+
 # Prepare date for XGBoost
+# df <- dp %>%
+#         select(event, day1, delta, age, gender) # select variables of interest
 df <- dp %>%
-        select(event, day1, delta, age, gender) # select variables of interest
+        select(event, day1, delta, age, gender, BMI, sepsis,
+               systolicBP_high, temp_high_admission, temp_high, systolicBP_high,
+               systolicBP_high_admission, systolicBP_low_admission, systolicBP_low,
+               ventilation_admission, APACHE_II, temp_low_admission, 
+               temp_low, bilirubine) %>% # select variables of interest
+        drop_na()
+
+# Fix some data types
+df$temp_low <- as.numeric(df$temp_low)
+df$temp_high <- as.numeric(df$temp_high)
+
+# Convert character columns to factors
+df[sapply(df, is.character)] <- lapply(df[sapply(df, is.character)], 
+                                       as.factor)
 
 # Set dependent variable name to y
 names(df)[1] <- "y"
@@ -225,14 +256,20 @@ df$y <- as.factor(df$y)
 # Make sure there are no missings
 if(any(is.na(df))) print("WARNING!! There are still incomplete samples present")
 
-# Create preprocessing recipe
+# Create preprocessing recipe for tuning and training
 ml_rec <- recipe(y ~ ., data = df) %>%
         #step_range(all_numeric()) %>% # Min-max normalisation
         step_dummy(all_predictors() & where(is.factor)) %>% # Convert to dummy variables
         themis::step_upsample(y)
 
+# Create preprocessing recipe for testing/predicting
+test_rec <- recipe(y ~ ., data = df) %>%
+        step_dummy(all_predictors() & where(is.factor))# Convert to dummy variables
+
 # Set some naming to base the exported file names on
-tune_name <- "_tuning"
+tune_name <- "_tuning_extra_variables"
+train_name <- "_training_extra_variables"
+plot_name <- "_plot_extra_variables"
 
 # Set hyperparameter values to evaluate
 trees_val <- c(10, 100,1000, 2000)
@@ -249,10 +286,96 @@ tune_res_xg <- tune_xgboost(df, ml_rec, trees_val = trees_val,
                             learn_rate_val = learn_rate_val,
                             loss_reduction_val = loss_reduction_val, rep = 5,
                             seed = seed, parallel_comp = TRUE, verbose = TRUE,
-                            k = 5, save = TRUE, entropy_grid = FALSE,
+                            k = 5, save = TRUE, entropy_grid = F,
                             save_name = paste("XGBoost", tune_name, sep = ""))
 
 
-modela <- lrm(event ~ delta, data  = dp, x = TRUE, y = TRUE)
-model3 <- lrm(event ~ day1 + delta + age + gender,
-              data = dp, x = TRUE, y = TRUE)
+# Set evaluation metric to choose best hyper parameter values
+metric = "mn_log_loss"
+
+# Train XGBoost
+model_xg <- train_xgboost(df, ml_rec, save = TRUE,
+                          save_name = paste("XGBoost", train_name, sep = ""),
+                          mtry = show_best(tune_res_xg$tune_res,
+                                           metric = metric, n=1)$mtry,
+                          trees = show_best(tune_res_xg$tune_res,
+                                            metric = metric, n=1)$trees,
+                          min_n = show_best(tune_res_xg$tune_res,
+                                            metric = metric, n=1)$min_n,
+                          tree_depth = show_best(tune_res_xg$tune_res,
+                                                 metric = metric,
+                                                 n=1)$tree_depth,
+                          learn_rate = show_best(tune_res_xg$tune_res,
+                                                 metric = metric,
+                                                 n=1)$learn_rate,
+                          loss_reduction = show_best(tune_res_xg$tune_res,
+                                                     metric = metric,
+                                                     n=1)$loss_reduction)
+
+
+#=======================#
+#                       #
+#  Logistic Regression  #
+#                       #
+#=======================#
+df_model3 <- juice(prep(ml_rec))
+model3 <- lrm(y ~ ., data = df_model3,
+              x = TRUE, y = TRUE)
+model3
+
+
+#=======================#
+#                       #
+#     Visualisation     #
+#                       #
+#=======================#
+
+proba_plot_xg <- plot_proba_truth(model_xg, df, test_rec, type = "violin",
+                                  "XGBoost - predicted probabilities",
+                                  save = TRUE,
+                                  save_name =
+                                          paste("XGBoost_predicted_probabilities_",
+                                                plot_name, sep = ""))
+
+# Spider/radar chart
+radar_chart <- plot_radar(list("XGBoost" = model_xg,
+                               "model3" = model3),
+                          test = list("XGBoost" = df,
+                                      "model3" = df),
+                          dep_var = df$y, vlcex = 1.5,
+                          rec = prep(test_rec),
+                          title = "", save = T,legend_offset = c(0.04, -0.05),
+                          save_name = paste("radar_chart", plot_name, sep = ""),
+                          alpha = 0.2, chance= FALSE)
+
+# Variable importance
+shapley_info <- get_shaply_info(juice(prep(test_rec)), simplify = TRUE,
+                                select_best(tune_res_xg$tune_res, "mn_log_loss"),
+                                n_features = 4)
+shapley_summary <- plot_shaply_summary(juice(prep(test_rec)), save = TRUE,
+                                       n_features = 4,
+                                       select_best(tune_res_xg$tune_res,
+                                                   "mn_log_loss"),
+                                       save_name = paste("shapley_summary",
+                                                         plot_name, sep = ""))
+
+shapley_feature_imp <- ggplot(shapley_info, aes(x = variable, y = mean_value,
+                                                fill = mean_value)) +
+        geom_bar(stat = "identity") +
+        coord_flip() + ylab("Mean absolute variable importance") + xlab("")+
+        scale_x_discrete(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0))
+ggsave(shapley_feature_imp, filename = paste("XGBoost_shapley_importances_",
+                                             plot_name, ".svg", sep = ""))
+
+roc_model3 <- pROC::roc(df_model3$y, predict(model3, juice(prep(test_rec)),
+                                             type = "fitted"), ci = TRUE)
+roc_model_xg <- pROC::roc(juice(prep(test_rec))$y,
+               predict_classprob.model_fit(model_xg, juice(prep(test_rec)))[[1]],
+               ci = TRUE)
+
+ggroc(roc_model_xg, legacy.axes = TRUE) + 
+        geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1), color="darkgrey",
+                     linetype="dashed")
+
+print(paste("XGBoost achieved an auc of", auc(roc_model_xg), "and LR an auc of",
+            auc(roc_model3), "and model3 and auc of", auc(r)))
