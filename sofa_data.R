@@ -146,6 +146,12 @@ d$SOFA_score_min_neuro <-  rowSums(data.frame(d$SOFA_resp, d$SOFA_coag,
                                               d$SOFA_live, d$SOFA_card,
                                               d$SOFA_rena))
 
+
+
+
+# Impute data
+
+
 ## Data opslaan om te modelleren
 save(d, file = "../../Data/sofa_data.Rda")
 

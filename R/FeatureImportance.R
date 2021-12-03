@@ -10,15 +10,21 @@
 #' @param save Boolean indicating whether to save the plot locally
 #' @param save_name String specifying the name of the file to save the plot to
 #' if save=TRUE.
+#' @param mod If the model has already been trained you can supply it here
 #'
 #' @return list containing the shapley values, the shapley information in long
 #' format, and the ggplot object.
 #' @export
 #'
 #' @examples
-plot_shaply_summary <- function(train, label = NULL, params = NULL,
+plot_shaply_summary <- function(train, mod = NULL, label = NULL, params = NULL,
                                 n_features = 10, save = FALSE,
                                 save_name = "Shapley summary plot"){
+  # Determine first and second label of dependent variable
+  label_0 <- names(table(train$y))[1]
+  label_1 <- names(table(train$y))[2]
+  
+  
   if(is.null(params)){
     param_list <- list(objective = "binary:logistic",
                        eval_metric = "logloss")
@@ -50,21 +56,32 @@ plot_shaply_summary <- function(train, label = NULL, params = NULL,
     if(step>100) stop("Something seems to be wrong with the supplied label")
   }
   
-  mod <- xgboost::xgboost(data = train, 
-                          label = as.matrix(label), 
+  if(is.null(mod)){
+    print("Model not supplied so training it now")
+    mod <- xgboost::xgboost(data = train,
+                          label = as.matrix(label),
                           params = param_list, nrounds = 100,
                           verbose = FALSE, nthread = parallel::detectCores())
+    
+    # To return the SHAP values and ranked features by mean|SHAP|
+    shap_values <- shap.values(xgb_model = mod, X_train = train)
+    
+    # To prepare the long-format data:
+    shap_long <- shap.prep(xgb_model = mod, top_n = n_features,
+                           X_train = train)
+  } else {
+    # To return the SHAP values and ranked features by mean|SHAP|
+    shap_values <- shap.values(xgb_model = mod$fit, X_train = train)
+    
+    # To prepare the long-format data:
+    shap_long <- shap.prep(xgb_model = mod$fit, top_n = n_features,
+                           X_train = train)
+    }
   
-  # To return the SHAP values and ranked features by mean|SHAP|
-  shap_values <- shap.values(xgb_model = mod, X_train = train)
-  
-  # To prepare the long-format data:
-  shap_long <- shap.prep(xgb_model = mod, top_n = n_features,
-                         X_train = train)
   
   # **SHAP summary plot**
-  plt <- shap.plot.summary(shap_long)
-  print(plt)
+  plt <- shap.plot.summary(shap_long) +
+    ylab(bquote("Higher predicted probability towards" ~ .(label_0) %<->% ~ "Higher predicted probability towards"~ .(label_1)))
   
   if(save)
     dev.print(svg, paste("Figures/", save_name, ".svg", sep = ""),
@@ -119,6 +136,23 @@ get_shaply_info <- function(train, label = NULL, params = NULL, n_features = 10,
                           label = as.matrix(label), 
                           params = param_list, nrounds = 100,
                           verbose = FALSE, nthread = parallel::detectCores())
+  
+  mod <- train_xgboost(train, ml_rec, save = F,
+                       mtry = show_best(tune_res_xg$tune_res,
+                                        metric = metric, n=1)$mtry,
+                       trees = show_best(tune_res_xg$tune_res,
+                                         metric = metric, n=1)$trees,
+                       min_n = show_best(tune_res_xg$tune_res,
+                                         metric = metric, n=1)$min_n,
+                       tree_depth = show_best(tune_res_xg$tune_res,
+                                              metric = metric,
+                                              n=1)$tree_depth,
+                       learn_rate = show_best(tune_res_xg$tune_res,
+                                              metric = metric,
+                                              n=1)$learn_rate,
+                       loss_reduction = show_best(tune_res_xg$tune_res,
+                                                  metric = metric,
+                                                  n=1)$loss_reduction)
   
   # To return the SHAP values and ranked features by mean|SHAP|
   shap_values <- shap.values(xgb_model = mod, X_train = train)

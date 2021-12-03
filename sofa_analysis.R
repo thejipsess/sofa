@@ -57,22 +57,17 @@ source("R/FeatureImportance.r")
 #==============================================================================#
 
 ## Databestand gecreeerd met sofa_data.R inlezen
-load("Data/sofa_data.Rda")
+load("../../Data/sofa_data.Rda")
 
-## Voor deze analyse: subsets o.b.v. dagen
-d   <- subset(d, d$dag > 0)
-d10 <- subset(d, d$dag < 11)
-d8  <- subset(d, d$dag < 9)
-d7  <- subset(d, d$dag < 8)
-d5  <- subset(d, d$dag < 6)
-d3  <- subset(d, d$dag < 4)
-
-table(d7$dag)
+# Set on what day you want to evaluate the samples
+day <- 7
 
 ## Persoonslevel regressie om dag 1 en t-dagen verandering sofa score met
 ## minimale meetfout te bepalen
+d <- subset(d, d$dag < day)
 
-d <- d7
+# Order samples on ID and day
+d <- arrange(d, Record.Id, dag)
 
 models <- lmList(SOFA_score ~ dag | Record.Id, data = d, na.action = na.omit)
 coef(models)
@@ -127,9 +122,7 @@ model3
 
 ## ROC curve
 r <- pROC::roc(dp$event, predict(model3, type = "fitted"),  ci = TRUE)
-r
 
-setwd("C:/Users/sande/Documents/Werk/sofa/figs")
 png("auc.png", width = 500, height = 500, pointsize = 16)
 ggroc(r, legacy.axes = TRUE) + 
         geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1), color="darkgrey",
@@ -141,50 +134,7 @@ roc_auc <- round(0.5 + 0.5*validate(model2, B = 1000)[1, 5], 2)
 roc_auc
 
 ## Afkappunten bepalen
-dp$kans <- predict(model3, type = "fitted")
-#dp$kans <- 1 - predict_classprob.model_fit(model_xg, juice(prep(test_rec)))[[1]]
-#dp$kans <- predict(model3, juice(prep(test_rec)), type = "fitted")
-
-round(mean(dp$kans,na.rm = TRUE) - mean(dp$event[!is.na(dp$kans)]), 3) ## Check
-
-range(dp$kans, na.rm = TRUE)
-hist(dp$kans)
-
-dp <- subset(dp, !is.na(dp$kans))
-
-afkap <- seq(25, 95, 2.5)
-sens  <- rep(NA, length(afkap))
-spec  <- rep(NA, length(afkap))
-ppv   <- rep(NA, length(afkap))
-npv   <- rep(NA, length(afkap))
-abst  <- rep(NA, length(afkap))
-misc  <- rep(NA, length(afkap))
-ligd  <- rep(NA, length(afkap))
-ligp  <- rep(NA, length(afkap))
-
-for (i in 1:length(afkap)){
-
- risk.FN  <- ifelse(dp$kans*100 < afkap[i], 0, 1)
- sens[i] <- round(table(risk.FN, dp$event)[2,2]/(table(risk.FN, dp$event)[2,2] +
-                  table(risk.FN, dp$event)[1,2])*100, 1)
- spec[i] <- round(table(risk.FN, dp$event)[1,1]/(table(risk.FN, dp$event)[1,1] +
-                  table(risk.FN, dp$event)[2,1])*100, 1)
- ppv[i]  <- round(table(risk.FN, dp$event)[2,2]/(table(risk.FN, dp$event)[2,2] +
-                  table(risk.FN, dp$event)[2,1])*100, 1)
- npv[i]  <- round(table(risk.FN, dp$event)[1,1]/(table(risk.FN, dp$event)[1,1] +
-                  table(risk.FN, dp$event)[1,2])*100, 1)
- abst[i] <- sum(risk.FN == 1, na.rm = TRUE)
- misc[i] <- table(risk.FN, dp$event)[2, 1]
- ligd[i] <- sum(ifelse(dp$ICU_LoS[risk.FN == 1] - 7 < 1, 0,
-                       dp$ICU_LoS[risk.FN == 1] - 7), na.rm = TRUE)
- ligp[i] <- round(ligd[i]/sum(dp$ICU_LoS, na.rm = TRUE)*100, 1)
-
-}
-
-## Afkap in (%), testkenmerken, aantal abstineren (let op: aantal al voor 7 dagen
-## van IC af, maar dat weten we bij aanvang niet), aantal onjuist abstineren,
-## gespaarde ligdagen, gespaarde ligdagen (%).
-data.frame(afkap, sens, spec, ppv, npv, abst, misc, ligd, ligp)
+construct_decision_matrix(dp, model3) # This function comes from Visualisation.R
 
 ## Alternatief: >70 komt er niet in
 risk.FN  <- ifelse(dp$age < 75, 0, 1)
@@ -231,13 +181,25 @@ dir.create("Tables", showWarnings = FALSE)
 # Prepare date for XGBoost
 # df <- dp %>%
 #         select(event, day1, delta, age, gender) # select variables of interest
-df <- dp %>%
+df <- dp
+row.names(df) <- df$Record.Id
+
+df <- df %>%
         select(event, day1, delta, age, gender, BMI, sepsis,
                systolicBP_high, temp_high_admission, temp_high, systolicBP_high,
                systolicBP_high_admission, systolicBP_low_admission, systolicBP_low,
                ventilation_admission, APACHE_II, temp_low_admission, 
                temp_low, bilirubine) %>% # select variables of interest
         drop_na()
+
+# SOFA_variables <- c("event", "PF_low", "vent_mode", "trombocytes", "bilirubine",
+#                     "vasopressors", "nor", "MAP_low", "GCS", "sedation",
+#                     "GCS_admission", "dialysis", "creatinine", "urine_output")
+# 
+# df <- dp %>%
+#         select(all_of(SOFA_variables)) %>%
+#         drop_na()
+
 
 # Fix some data types
 df$temp_low <- as.numeric(df$temp_low)
@@ -329,6 +291,10 @@ model3
 #     Visualisation     #
 #                       #
 #=======================#
+tune_res_plot <- plot_tune_res(tune_res_xg$tune_res, save = T, 
+                               save_name = paste("XGBoost", tune_name,
+                                                 sep = ""))
+
 
 proba_plot_xg <- plot_proba_truth(model_xg, df, test_rec, type = "violin",
                                   "XGBoost - predicted probabilities",
@@ -346,7 +312,7 @@ radar_chart <- plot_radar(list("XGBoost" = model_xg,
                           rec = prep(test_rec),
                           title = "", save = T,legend_offset = c(0.04, -0.05),
                           save_name = paste("radar_chart", plot_name, sep = ""),
-                          alpha = 0.2, chance= FALSE)
+                          alpha = 0.2, chance= T)
 
 # Variable importance
 shapley_info <- get_shaply_info(juice(prep(test_rec)), simplify = TRUE,
@@ -354,7 +320,7 @@ shapley_info <- get_shaply_info(juice(prep(test_rec)), simplify = TRUE,
                                 n_features = 4)
 shapley_summary <- plot_shaply_summary(juice(prep(test_rec)), save = TRUE,
                                        n_features = 4,
-                                       select_best(tune_res_xg$tune_res,
+                                       params = select_best(tune_res_xg$tune_res,
                                                    "mn_log_loss"),
                                        save_name = paste("shapley_summary",
                                                          plot_name, sep = ""))
@@ -379,3 +345,15 @@ ggroc(roc_model_xg, legacy.axes = TRUE) +
 
 print(paste("XGBoost achieved an auc of", auc(roc_model_xg), "and LR an auc of",
             auc(roc_model3), "and model3 and auc of", auc(r)))
+
+
+
+dm_xg <- construct_decision_matrix(dp, model_xg, df = df, test_rec = test_rec)
+dm_lr <- construct_decision_matrix(dp, model3)
+dm_both <- reshape2::melt(list(LR = dm_lr[,c("misc", "ligd")], XG = dm_xg[,c("misc", "ligd")]), id.vars = "misc") %>%
+        arrange(desc("value"))
+
+ggplot(dm_both, aes(x = misc, y = value, group = L1)) +
+        geom_line(aes(color = L1), size = 2) +
+        xlim(c(0,100)) +
+        scale_colour_discrete(name = "model types")

@@ -6,4 +6,5 @@ Figures/
 Tables/
 Objects/
 *.png
+*.svg
 .Rproj.user
