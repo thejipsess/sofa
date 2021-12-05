@@ -1112,7 +1112,8 @@ plot_proba_truth <- function(x, test = NULL, rec = NULL, type = "scatter",
 #' @param legend_horizontal 
 #' @param chance Boolean indicating whether to add the 0.5 threshold which
 #' indicates how a purely random model would perform.
-#' @param rec preprocessing recipe that IS PREPARED on the training set.
+#' @param rec preprocessing recipe or list of recipes that IS PREPARED on the
+#' training set.
 #' @param save_name 
 #'
 #' @return
@@ -1140,7 +1141,12 @@ plot_radar <- function(model, test, dep_var, rec = NULL, model_name = "model",
   add_metrics <- function(model, model_name, test, df, i){
     # Apply preprocessing recipe to test set
     if(!is.null(rec))
-      test <- bake(rec, new_data = test)
+      if(class(rec)[1] == "list"){
+        test <- bake(rec[[i]], new_data = test)
+      } else{
+        test <- bake(rec, new_data = test)
+      }
+      
     
     # Predict the test set
     if(class(model)[1] == "mixo_splsda"){ # If model is sPLS-DA prediction works a bit different
@@ -1242,13 +1248,15 @@ plot_radar <- function(model, test, dep_var, rec = NULL, model_name = "model",
 #' contains all the sample used for testing but not all variables. Must be
 #' supplied together with recipe
 #' @param test_rec preprocessing recipe. Must be supplied together with df.
+#' @param model_type type of model that is used, can be  "LR", "XG" or "custom" 
+#' when you simply have probabilities stored in the data.
 #'
 #' @return
 #' @export
 #'
 #' @examples
-construct_decision_matrix <- function(dp, model, df = NULL, test_rec = NULL,
-                                      day = 7){
+construct_decision_matrix <- function(dp, model = NULL, df = NULL, test_rec = NULL,
+                                      day = 7, model_type = "LR"){
   # If a df has been supplied, it is possible that dp contains different
   # samples than the data the model will be tested on, therefore we here
   # ensure that only samples present in the testing data are retained, and in 
@@ -1262,11 +1270,13 @@ construct_decision_matrix <- function(dp, model, df = NULL, test_rec = NULL,
   }
   
   ## Afkappunten bepalen
-  if(class(model)[1] == "lrm"){
+  if(tolower(model_type) == "sander"){
     kans <- predict(model, type = "fitted")
-  } else {
+  } else if (model_type == "XG" | model_type == "LR"){
     kans <- 1 - predict_classprob.model_fit(model, bake(prep(test_rec),
                                                         new_data = df))[[1]]
+  } else if(model_type == "custom"){
+    kans <- 1 - dp$survival_chance/100
   }
   
   hist(kans)
