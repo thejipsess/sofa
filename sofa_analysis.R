@@ -43,6 +43,7 @@ library(SHAPforxgboost)
 library(fmsb)
 library(svglite)
 library(doRNG)
+library(missForest)
 
 # Load local scripts
 source("R/XGBoost.r")
@@ -52,6 +53,7 @@ source("R/Visualisation.r")
 source("R/FeatureImportance.r")
 source("R/FeatureImportance.r")
 source("R/CustomModels.R")
+source("R/Imputation.R")
 
 
 #==============================================================================#
@@ -59,9 +61,35 @@ source("R/CustomModels.R")
 #   This Section contains the code from Sander
 #
 #==============================================================================#
+# Set a random seed
+seed <- 7649
 
 ## Databestand gecreeerd met sofa_data.R inlezen
 load("../../Data/sofa_data.Rda")
+
+# Filter out unnecessary columns
+keep <- c("Record.Id", "BMI", "gender", "age", "sepsis", "CHC.Diabetes",
+          "CHC.Chronic_Kidney_Disease", "CHC.Malignancy", "CHC.Liver_disease",
+          "CHC.Chronic_lung_disease", "CHC.Myocardial_infaction",
+          "CHC.Congestive_Heart_Faillure", "CHC.Peripheral_vascular_disease",
+          "CHC.CVA_or_TIA", "CHC.Dementia", "CHC.Connective_tissue_disease",
+          "CHC.Peptic_ulcer_disease", "CHC.Hemiplegia", "CHC.Immunosuppression",
+          "ICU_mortality", "HR_low", "HR_high", "RR_low", "RR_high", "temp_low",
+          "temp_high", "systolicBP_low", "systolicBP_high", "MAP_low", "MAP_high",
+          "urine_output", "fluid_balance", "GCS", "sodium", "potassium", "lactate",
+          "ureum", "creatinine", "AF_daily", "yGT", "ASAT", "ALAT", "LD_daily",
+          "bilirubine", "CK_daily", "hstnt", "CKmb", "NTproBNP", "CRP", "Albumine",
+          "ferritine", "glucose_low", "glucose_high", "WBC", "Hb_", "Ht_low",
+          "trombocytes", "PT_", "APTT", "fibrinogen", "D_dimer", "lymfo_abs",
+          "steroids", "vasopressors", "nor", "adrenaline", "dobutamine",
+          "dopamine", "musclerelax", "analgesia", "PF_low", "PaCO2_low",
+          "PaO2_low", "FiO2_low", "PF_high", "PaCO2_high", "PaO2_high",
+          "FiO2_high", "vent_mode", "FiO2_ventSettings", "Vfrequency", "Pins",
+          "PEEP", "Vtidal", "PIP", "Cdyn", "ECMO", "pH_", "PaCO2", "PaO2", "dag",
+          "SOFA_resp", "SOFA_coag", "SOFA_live", "SOFA_card", "SOFA_neur",
+          "SOFA_rena", "SOFA_score")
+
+d <- select(d, all_of(keep))
 
 # Set on what day you want to evaluate the samples
 day <- 7
@@ -73,6 +101,38 @@ d <- subset(d, d$dag < day)
 # Order samples on ID and day
 d <- arrange(d, Record.Id, dag)
 
+# Fix all variable data types
+# Convert character columns to factors
+d[d == "##USER_MISSING_99##"] <- NaN
+factor_vars <- c("gender", "sepsis", "CHC.Diabetes", "CHC.Chronic_Kidney_Disease",
+                 "CHC.Malignancy", "CHC.Liver_disease", "CHC.Chronic_lung_disease",
+                 "CHC.Myocardial_infaction", "CHC.Congestive_Heart_Faillure",
+                 "CHC.Peripheral_vascular_disease", "CHC.CVA_or_TIA", "CHC.Dementia",
+                 "CHC.Connective_tissue_disease", "CHC.Peptic_ulcer_disease",
+                 "CHC.Hemiplegia", "CHC.Immunosuppression", "ICU_mortality",
+                 "steroids", "vasopressors", "musclerelax", "analgesia",
+                 "vent_mode", "ECMO")
+numeric_vars <- c("sodium", "potassium", "temp_low", "temp_high", "lactate", "ureum", "AF_daily",
+                  "yGT", "ASAT", "ALAT", "LD_daily", "CK_daily", "hstnt", "CKmb",
+                  "NTproBNP", "CRP", "Albumine", "ferritine", "glucose_low",
+                  "glucose_high", "WBC", "Hb_","Ht_low", "trombocytes", "PT_",
+                  "APTT", "fibrinogen", "D_dimer", "lymfo_abs", "nor",
+                  "adrenaline", "dobutamine", "dopamine", "PF_low", "PaCO2_low",
+                  "PaO2_low", "FiO2_low", "PF_high", "PaCO2_high", "PaO2_high",
+                  "FiO2_high", "FiO2_ventSettings", "Vfrequency", "Pins",
+                  "PEEP", "Vtidal", "PIP", "Cdyn", "pH_", "PaCO2", "PaO2", "dag",
+                  "SOFA_resp", "SOFA_coag", "SOFA_live", "SOFA_card", "SOFA_neur",
+                  "SOFA_rena", "SOFA_score")
+d[,factor_vars] <- lapply(d[,factor_vars], as.factor)
+d[,numeric_vars] <- lapply(d[,numeric_vars], as.numeric)
+
+# Discard any samples with missing info on the dependent variable
+d <- d[!is.na(d$ICU_mortality)]
+
+# Impute missing data
+d_impute <- RF_impute(d, seed)
+d_imputed <- d_impute$df
+
 models <- lmList(SOFA_score ~ dag | Record.Id, data = d, na.action = na.omit)
 coef(models)
 res <- data.frame(Record.Id = rownames(coef(models)),
@@ -82,7 +142,7 @@ names(res)[3] <- "Slope"
 
 res$day1  <- round(res$Intercept + 1*res$Slope, 1)
 res$day5  <- round(res$Intercept + 5*res$Slope, 1)
-res$delta <- round(4*res$Slope, 1)
+res$delta <- round(7*res$Slope, 1)
 
 ## Databestand maken waarbij iedere patient één observatie bijdraagt
 dp <- d[!duplicated(d$Record.Id, fromLast = TRUE), ]
@@ -133,7 +193,7 @@ ggroc(r, legacy.axes = TRUE) +
                      linetype="dashed")
 dev.off()
 
-set.seed(070181)
+set.seed(seed)
 roc_auc <- round(0.5 + 0.5*validate(model2, B = 1000)[1, 5], 2)
 roc_auc
 
@@ -175,8 +235,7 @@ dm_NICE <- construct_decision_matrix(df_NICE, model_type = "custom", day = 0)
 #=======================#
 #!!! still need to implement train/test split beforehand
 
-# Set a random seed
-seed <- 7649
+
 
 # Define repeted cross-validation setup for hyperparameter optimisation
 k = 5
@@ -223,8 +282,7 @@ if(feature_set == "SOFA"){
                 drop_na()
 }
 
-# Convert character columns to factors
-df[sapply(df, is.character)] <- lapply(df[sapply(df, is.character)], as.factor)
+
 
 # Set dependent variable name to y
 names(df)[1] <- "y"
