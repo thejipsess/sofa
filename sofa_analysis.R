@@ -48,13 +48,13 @@ library(missForest)
 # Load local scripts
 source("R/XGBoost.r")
 source("R/LogisticRegression.r")
+source("R/DecisionTree.r")
 source("R/Parallel.r")
 source("R/Visualisation.r")
 source("R/FeatureImportance.r")
 source("R/FeatureImportance.r")
 source("R/CustomModels.R")
 source("R/Imputation.R")
-
 
 #==============================================================================#
 #
@@ -127,7 +127,7 @@ d[,factor_vars] <- lapply(d[,factor_vars], as.factor)
 d[,numeric_vars] <- lapply(d[,numeric_vars], as.numeric)
 
 # Discard any samples with missing info on the dependent variable
-d <- d[!is.na(d$ICU_mortality)]
+d <- d[!is.na(d$ICU_mortality),]
 
 # Impute missing data
 d_impute <- RF_impute(d, seed)
@@ -377,6 +377,44 @@ model_lr <- logistic_regression(df, ml_rec_lr, save = TRUE,
                                                     metric = metric)$penalty,
                                 mixture = select_best(tune_res_lr$tune_res,
                                                     metric = metric)$mixture)
+
+
+#=======================#
+#                       #
+#     Decision tree     #
+#                       #
+#=======================#
+
+# Create preprocessing recipe for tuning and training
+ml_rec_dt <- recipe(y ~ ., data = df) %>%
+        step_range(all_numeric()) %>% # Min-max normalisation
+        step_dummy(all_predictors() & where(is.factor)) %>% # Convert to dummy variables - unnecessary for decision tree 
+        themis::step_upsample(y)
+
+# Create preprocessing recipe for testing/predicting
+test_rec_dt <- recipe(y ~ ., data = df) %>%
+        step_range(all_numeric()) %>% # Min-max normalisation
+        step_dummy(all_predictors() & where(is.factor))# Convert to dummy variables
+
+# Tune hyperparamters Logistic Regression
+depth <- c(1, 2, 3, 5, 8, 10, 30, 50) # Set tree depth values to evaluate
+min_n <- c(1, 5, 10, 30, 50, 100) # Set min_n values to evaluate
+complexity <- c(0, 0.01, 0.1, 0.5, 1, 10)
+tune_res_dt <- tune_decision_tree(df, ml_rec_dt, depth = depth,
+                                  min_n = min_n, complexity = complexity,
+                                  seed = seed, k = k, save = F, rep = repeats,
+                                  save_name = paste("DT", tune_name, sep = ""))
+
+# Train Logistic Regression model
+model_dt <- train_decision_tree(df, ml_rec_dt, save = F,
+                                save_name = paste("DT", train_name, sep = ""),
+                                min_n = select_best(tune_res_dt$tune_res,
+                                                    metric = metric)$min_n,
+                                complexity = select_best(tune_res_dt$tune_res,
+                                                 metric = metric)$cost_complexity,
+                                depth = select_best(tune_res_dt$tune_res,
+                                                    metric = metric)$tree_depth)
+
 
 #=======================#
 #                       #
